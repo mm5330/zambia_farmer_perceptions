@@ -1,0 +1,11 @@
+gid,province,sum_early_first,sum_early_last,sum_late_first,sum_late_last,roll_early_first,roll_early_last,roll_late_first,roll_late_last,sm_first,sm_last,ndvi_month,excess_early_first,excess_early_last,excess_late_first,excess_late_last,roll_excess_early_first,roll_excess_early_last,roll_excess_late_first,roll_excess_late_last
+1,Central,31,36,38,42,33,37,37,43,37,43,Mar,31,36,38,42,31,36,38,42
+2,Copperbelt,32,36,37,40,33,37,37,43,37,43,Mar,32,36,37,40,32,36,37,40
+3,Eastern,32,36,38,42,33,37,37,43,37,43,Mar,32,36,38,42,32,36,38,42
+4,Luapula,30,36,37,42,33,37,37,43,37,43,Mar,30,36,37,42,30,36,37,42
+5,Lusaka,32,38,39,42,33,37,37,43,37,43,Mar,32,38,39,42,32,38,39,42
+6,Muchinga,32,36,40,43,33,37,37,43,37,43,Mar,32,36,40,43,32,36,40,43
+7,North_Western,32,37,38,41,33,37,37,43,37,43,Mar,32,37,38,41,32,37,38,41
+8,Northern,31,37,38,41,33,37,37,43,37,43,Mar,31,37,38,41,31,37,38,41
+9,Southern,32,38,39,42,33,37,37,43,37,43,Mar,32,38,39,42,32,38,39,42
+10,Western,32,37,38,40,33,37,37,43,37,43,Mar,32,37,38,40,32,37,38,40

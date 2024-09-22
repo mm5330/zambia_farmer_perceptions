@@ -1,0 +1,2 @@
+dataset,sum_early,sum_late,roll_early,roll_late,SM,cap,freq,bound1,bound2,NDVI,sum_early_weight,sum_late_weight,roll_early_weight,roll_late_weight,SM_weight,NDVI_weight,excess_early,excess_late,excess_early_weight,excess_late_weight,roll_excess_early,roll_excess_late,roll_excess_early_weight,roll_excess_late_weight
+ARC,TRUE,TRUE,FALSE,FALSE,FALSE,25,0.2,1984,2021,FALSE,0.5,0.5,0.5,0.5,0.5,0.5,FALSE,FALSE,0.5,0.5,FALSE,FALSE,0.5,0.5
