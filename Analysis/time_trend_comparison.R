@@ -1,5 +1,4 @@
 
-### This file performs the time series analysis for H2 and H3
 ### NB: inputs and small v large analysis should start in 2006
 ### yield analysis should start in 2000
 
@@ -15,8 +14,9 @@ library(ggpubr)
 library(reshape2)
 library(readxl)
 library(lubridate)
+library(zoo)
 
-setwd("") ## update working directory here 
+setwd("~/Documents/Thesis/Data")
 
 district_names <- read.csv(paste0(getwd(),"/Insurance/Defaults_admin2.csv"))
 
@@ -62,7 +62,7 @@ payouts_national <- payouts %>%
 farmer_groups <- read.csv(paste0(getwd(),"/Farmer Survey/badyear_groups.csv"))
 
 wrsi <- read.csv(paste0(getwd(),"/Biophysical/TAMSAT_SM_Adm2_1983_2022.csv")) %>%
-  dplyr::select(mean,year,ADM2_NAME) %>%
+  dplyr::select(mean,year,Name) %>%
   rename("wrsi" = "mean") %>%
   mutate(year = year + 1) # to put things in terms of agricultural years
 
@@ -78,7 +78,8 @@ yield_national <- yield_disagg %>%
   group_by(Year) %>%
   summarise_all(~sum(.x,na.rm=T)) %>%
   mutate(yield_national = `Expected Production (MT)` / `Area Planted (Ha)`,
-         fertilizer_national = (`Fertiliser Basal (MT)` + `Fertiliser Top (MT)`) / `Area Planted (Ha)`  ) %>%
+         fertilizer_national = (`Fertiliser Basal (MT)`) / `Area Planted (Ha)`  ) %>%
+  mutate(fertilizer_national = ifelse(fertilizer_national == 0, NA, fertilizer_national)) %>% 
   filter(Year > 2000) %>% ## for now
   mutate(policy_indicator = ifelse(Year == 2003,2003,
                                    ifelse(Year == 2011,2011,NA))) 
@@ -113,8 +114,9 @@ yield_province_bysize <- yield_disagg %>%
 
 pres_plot_1 <- ggplot(yield_national, aes(x = Year, y = yield_national)) +
   geom_point()+ geom_line() +
-  geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year)< 2011,])+
-  geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year) >=2011,])+
+  geom_smooth(color='red',se=F) +
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year)< 2011,])+
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year) >=2011,])+
   geom_vline(aes(xintercept=policy_indicator,color=factor(policy_indicator)),linetype='dashed') +
   scale_color_manual(labels=c("FISP Introduced","FISP Scaled Up"), 
                      values = c("darkgreen","blue"),name="Policy Timing",na.translate=FALSE) +
@@ -122,7 +124,8 @@ pres_plot_1 <- ggplot(yield_national, aes(x = Year, y = yield_national)) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1), legend.position = 'top') +
   ylab("Yield (mt/ha)") +
-  labs(title = "National Maize Yield over Time") 
+  xlab("Harvest Year") +
+  labs(title = "National Maize Yield") 
 
 
 ggplot(yield_province, aes(x = YEAR, y = yield)) +
@@ -158,18 +161,20 @@ plot_yield_province <- ggplot(yield_province_bysize, aes(x = Year, y = yield_nat
 
 ## fertilizer usage trend
 
-pres_plot_2 <- ggplot(yield_national %>% filter(Year >= 2000 & Year != 2020) %>% mutate(fertilizer_national = ifelse(Year < 2007, NA,fertilizer_national)), aes(x = Year, y = fertilizer_national)) +
+pres_plot_2 <- ggplot(yield_national %>% mutate(fertilizer_national = ifelse(Year < 2007, NA,fertilizer_national)), aes(x = Year, y = fertilizer_national)) +
   geom_point()+ geom_line() +
-  geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year)< 2011 & as.numeric(yield_national$Year) > 2006,])+
-  geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year) >=2011 & as.numeric(yield_national$Year) !=2020,])+
+  geom_smooth(color='red',se=F) +
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year)< 2011 & as.numeric(yield_national$Year) > 2006,])+
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year) >=2011 & as.numeric(yield_national$Year) !=2020,])+
   geom_vline(aes(xintercept=policy_indicator,color=factor(policy_indicator)),linetype='dashed') +
   scale_color_manual(labels=c("FISP Introduced","FISP Scaled Up"), 
-                     values = c("darkgreen","blue"),name="Policy Timing",na.translate=FALSE) +  scale_x_continuous( breaks = seq(2000, 2022, by = 5)) +
+                     values = c("darkgreen","blue"),name="Policy Timing",na.translate=FALSE) +  scale_x_continuous( breaks = seq(2001, 2022, by = 5)) +
   theme_bw() +
   theme(legend.position = "none")+
   ylab("Fertilizer usage (mt/ha)") +
+  xlab("Harvest Year") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(title = "Fertilizer Usage Rate over Time") 
+  labs(title = "Fertilizer Usage Rate") 
 
 
 # disaggregated by small vs large
@@ -262,37 +267,43 @@ plot_production_province <-  ggplot(yield_province_bysize, aes(x = Year, y = `Ex
 share_small <- yield_national_bysize %>% pivot_wider(names_from = "Category", values_from = `Expected Production (MT)`, id_cols = 'Year') %>%
   mutate(share_small = SM / (LS + SM))
 
-ggplot(share_small, aes(x = Year, y = share_small)) +
-  geom_point()+ geom_line() +
-  geom_smooth( method = lm, color ='red', data = share_small[ as.numeric(share_small$Year)< 2011,])+
-  geom_smooth( method = lm, color ='red', data = share_small[ as.numeric(share_small$Year) >=2011,])+
-  geom_vline(xintercept = 2011, linetype="dotted", color = "black", size=1) +
-  scale_x_continuous( breaks = seq(2007, 2022, by = 1)) +
-  theme(legend.position = "none")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(title = "Smallholder Share of Production over Time") 
+yield_national <- left_join(yield_national,share_small,by="Year")
 
+pres_plot_3 <- ggplot(yield_national, aes(x = Year, y = share_small)) +
+  geom_point()+ geom_line() +
+  geom_smooth(color='red',se=F) +
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year)< 2011 & as.numeric(yield_national$Year) > 2006,])+
+  # geom_smooth( method = lm, color ='red', data = yield_national[ as.numeric(yield_national$Year) >=2011 & as.numeric(yield_national$Year) !=2020,])+
+  geom_vline(aes(xintercept=policy_indicator,color=factor(policy_indicator)),linetype='dashed') +
+  scale_color_manual(labels=c("FISP Introduced","FISP Scaled Up"), 
+                     values = c("darkgreen","blue"),name="Policy Timing",na.translate=FALSE) +  scale_x_continuous( breaks = seq(2001, 2022, by = 5)) +
+  theme_bw() +
+  theme(legend.position = "none")+
+  ylab("% production from smallholders") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(title = "Smallholder Production Share") 
 ## payouts
 
-pres_plot_3 <- ggplot(payouts_national %>% filter(year %in% c(2000:2021)), aes(x = year, y = payout )) +
+pres_plot_4 <- ggplot(payouts_national %>% filter(year %in% c(2001:2021)), aes(x = year, y = payout )) +
   geom_point()+ geom_line() +
   geom_vline(aes(xintercept=policy_indicator,color=factor(policy_indicator)),linetype='dashed') +
   scale_color_manual(labels=c("FISP Introduced","FISP Scaled Up"), 
                      values = c("darkgreen","blue"),name="Policy Timing",na.translate=FALSE) +
-  scale_x_continuous( breaks = seq(2000, 2021, by = 5)) +
+  scale_x_continuous( breaks = seq(2001, 2021, by = 5)) +
   theme_bw() +
   ylab("Cumulative drought index") +
+  xlab("Harvest Year") +
   theme(legend.position = "none")+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   labs(title = "Met. Drought Severity Over Time") 
 
-ggarrange(pres_plot_1,pres_plot_2,pres_plot_3,ncol=1,common.legend = TRUE)
+ggarrange(pres_plot_1,pres_plot_2,pres_plot_4,ncol=1,common.legend = TRUE)
 
-ggplot(payouts_national %>% filter(year %in% c(1987:2020)), aes(x = year, y = payout )) +
+ggplot(payouts_national %>% filter(year %in% c(1983:2020)), aes(x = year, y = payout )) +
   geom_point()+ geom_line() +
   geom_vline(xintercept = 2003, linetype="dotted", color = "black", size=1) +
   geom_vline(xintercept = 2011, linetype="dotted", color = "black", size=1) +
-  scale_x_continuous( breaks = seq(1987, 2020, by = 1)) +
+  scale_x_continuous( breaks = seq(1983, 2020, by = 1)) +
   theme(legend.position = "none")+
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   labs(title = "Total District Payouts Over Time (Full Series)") 
@@ -316,7 +327,7 @@ yield_alltypes <- yield_disagg %>%
   summarise_if(is.numeric,~sum(.x,na.rm=T))
 
 payouts_joined <- left_join(payouts,admin2_crosswalk,by=c("district"="district_2022")) %>%
-  left_join(wrsi,by=c("year" = "year", "district" = "ADM2_NAME")) %>%
+  left_join(wrsi,by=c("year" = "year", "district" = "Name")) %>%
   group_by(year,district_2000) %>%
   summarise(payout = sum(payout,na.rm=T), group = getmode(group), wrsi = mean(wrsi,na.rm=T)) %>%
   filter(year >= 2001 & year <= 2020) %>%
@@ -327,7 +338,7 @@ payouts_joined <- left_join(payouts,admin2_crosswalk,by=c("district"="district_2
 payouts_joined$index <- c(1:nrow(payouts_joined))
 
 payouts_province <- payouts %>% group_by(year,province) %>%
-  summarise(payout = sum(payout,na.rm=T)) %>%
+  summarise(payout = mean(payout,na.rm=T)) %>%
   filter(province != "Muchinga" & year %in% c(1987:2020)) %>%
   left_join(yield_province,by=c("year" = "YEAR","province" = "province"))
 
@@ -335,116 +346,62 @@ payouts_province$index <- c(1:nrow(payouts_province))
 
 payouts_joined <- payouts_joined %>% group_by(district_2000) %>% mutate(wrsi_std = scale(wrsi)[,1]) %>% ungroup()
 
+## addition dec 2024 - compute 5-year rolling average for de-meaning 
+
+payouts_joined <- payouts_joined %>% group_by(district_2000) %>%
+  mutate(yield_rolling = rollapply(yield,5,function(x) mean(x,na.rm=T),fill=list('extend',NA,'extend'))) %>%
+  mutate(yield_demeaned = yield - yield_rolling) %>%
+  ungroup()
+
 library(plm)
-mod1 <- plm(yield ~ as.numeric(year) + payout,data=payouts_joined
-                     ,index=c("district_2000","year"),effect='individual',model="random")
+library(collapse)
+library(stargazer)
+
+payouts_joined_pdata <- pdata.frame(payouts_joined %>% filter(!is.na(yield)),index=c("district_2000","year")) 
+payouts_joined_pdata_short <- pdata.frame(payouts_joined %>% filter(!is.na(yield)) %>% filter(year >= 2007),index=c("district_2000","year")) 
+
+purtest(yield ~ 1, data=payouts_joined_pdata,pmax=1,test='ips',exo='trend')
+psacf(payouts_joined_pdata$yield)
+
+mod1 <- plm(yield ~ payout + as.numeric(year),data=payouts_joined_pdata,effect='individual',model="random")
 summary(mod1)
-mod1_residuals <- data.frame("resid_m1" = as.numeric(mod1$residuals), "index" = as.numeric(names(mod1$residuals)))
-payouts_joined <- left_join(payouts_joined,mod1_residuals,by="index")
-mod1_resid_trend <- plm(resid_m1 ~ lag(resid_m1,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod1_resid_trend)
-plot(log(mod1$residuals^2))
-mean(abs(mod1$residuals))
+pbgtest(mod1)
 
-mod2 <- plm(yield ~ payout,data=payouts_joined
-            ,index=c("district_2000","year"),effect='individual',model="fd")
+mod1a <- plm(yield ~ payout + as.numeric(year),data=payouts_joined_pdata,effect='individual',model="within")
+phtest(mod1,mod1a)
+
+mod1b <- plm(yield ~ payout,data=payouts_joined_pdata,effect='individual',model="random")
+summary(mod1b)
+pbgtest(mod1b)
+
+mod2 <- plm(yield ~ payout + lag(yield,3) + lag(yield,2) + lag(yield,1),data=payouts_joined_pdata,effect='individual',model="random")
 summary(mod2)
-mod2_residuals <- data.frame("resid_m2" = as.numeric(mod2$residuals), "index" = as.numeric(names(mod2$residuals)))
-payouts_joined <- left_join(payouts_joined,mod2_residuals,by="index")
-mod2_resid_trend <- plm(resid_m2 ~ lag(resid_m2,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod2_resid_trend)
+pbgtest(mod2)
 
-
-mod3 <- plm(yield ~ factor(group) + payout*factor(era),data=payouts_joined
+mod2a <- plm(yield ~ payout + lag(yield,3) + lag(yield,2) + lag(yield,1) + as.numeric(year),data=payouts_joined
             ,index=c("district_2000","year"),effect='individual',model="random")
+summary(mod2a)
+pbgtest(mod2a)
+
+mod3 <- plm(yield ~ payout + fertiliser_rate + as.numeric(year),data=payouts_joined_pdata_short
+            ,effect='individual',model="random")
 summary(mod3)
-mod3_residuals <- data.frame("resid_m3" = as.numeric(mod3$residuals), "index" = as.numeric(names(mod3$residuals)))
-payouts_joined <- left_join(payouts_joined,mod3_residuals,by="index")
-mod3_resid_trend <- plm(resid_m3 ~ lag(resid_m3,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod3_resid_trend)
-plot(log(mod3$residuals^2))
-mean(abs(mod3$residuals))
+pbgtest(mod3)
 
-mod4 <- plm(production ~ as.numeric(year) + payout,data=payouts_joined
-            ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod4)
-mod4_residuals <- data.frame("resid_m4" = as.numeric(mod4$residuals), "index" = as.numeric(names(mod4$residuals)))
-payouts_joined <- left_join(payouts_joined,mod4_residuals,by="index")
-mod4_resid_trend <- plm(resid_m4 ~ lag(resid_m4,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod4_resid_trend)
-plot(log(mod4$residuals^2))
+stargazer(mod1,mod2a,mod3,type='html',out=paste0(getwd(),"/table1.html"))
 
-mod5 <- plm(production ~ factor(group) + payout*factor(era),data=payouts_joined
-            ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod5)
-mod5_residuals <- data.frame("resid_m5" = as.numeric(mod5$residuals), "index" = as.numeric(names(mod5$residuals)))
-payouts_joined <- left_join(payouts_joined,mod5_residuals,by="index")
-mod5_resid_trend <- plm(resid_m5 ~ lag(resid_m5,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod5_resid_trend)
-plot(log(mod5$residuals^2))
-
-mod6 <- plm(planting ~ as.numeric(year) + payout,data=payouts_joined
-            ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod6)
-mod6_residuals <- data.frame("resid_m6" = as.numeric(mod6$residuals), "index" = as.numeric(names(mod6$residuals)))
-payouts_joined <- left_join(payouts_joined,mod6_residuals,by="index")
-mod6_resid_trend <- plm(resid_m6 ~ lag(resid_m6,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod6_resid_trend)
-plot(log(mod6$residuals^2))
-
-mod7 <- plm(planting~ factor(group) + payout*factor(era),data=payouts_joined
-            ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod7)
-mod7_residuals <- data.frame("resid_m7" = as.numeric(mod7$residuals), "index" = as.numeric(names(mod7$residuals)))
-payouts_joined <- left_join(payouts_joined,mod7_residuals,by="index")
-mod7_resid_trend <- plm(resid_m7 ~ lag(resid_m7,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod7_resid_trend)
-plot(log(mod7$residuals^2))
-
-mod8 <- plm(yield ~ as.numeric(year) + payout + fertiliser_rate,data=payouts_joined %>% filter(year >= 2007 & year != 2020)
-            ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod8)
-mod8_residuals <- data.frame("resid_m8" = as.numeric(mod8$residuals), "index" = as.numeric(names(mod8$residuals)))
-payouts_joined <- left_join(payouts_joined,mod8_residuals,by="index")
-mod8_resid_trend <- plm(resid_m8 ~ lag(resid_m8,c(1:5)),data=payouts_joined
-                        ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod8_resid_trend)
-plot(log(mod8$residuals^2))
-
-mod9 <- plm(yield ~ as.numeric(year) + payout,data=payouts_province
+mod4 <- plm(yield ~ as.numeric(year) + payout,data=payouts_province
             ,index=c("province","year"),effect='individual',model="random")
-summary(mod9)
-mod9_residuals <- data.frame("resid_m9" = as.numeric(mod9$residuals), "index" = as.numeric(names(mod9$residuals)))
-payouts_province <- left_join(payouts_province,mod9_residuals,by="index")
-mod9_resid_trend <- plm(resid_m9 ~ lag(resid_m9,c(1:5)),data=payouts_province
-                        ,index=c("province","year"),effect='individual',model="within")
-summary(mod9_resid_trend)
-plot(log(mod9$residuals^2))
+summary(mod4)
+pbgtest(mod4)
 
-mod10 <- plm(yield ~ payout,data=payouts_province
-             ,index=c("province","year"),effect='individual',model="fd")
-summary(mod10)
-mod10_residuals <- data.frame("resid_m10" = as.numeric(mod10$residuals), "index" = as.numeric(names(mod10$residuals)))
-payouts_province <- left_join(payouts_province,mod10_residuals,by="index")
-mod10_resid_trend <- plm(resid_m10 ~ lag(resid_m10,c(1:5)),data=payouts_province
-                         ,index=c("province","year"),effect='individual',model="within")
-summary(mod10_resid_trend)
+mod5 <- plm(yield ~ as.numeric(year) + payout + lag(yield,3) + lag(yield,2) + lag(yield,1),data=payouts_province
+            ,index=c("province","year"),effect='individual',model="random")
+summary(mod5)
+pbgtest(mod5)
 
-mod11 <- plm(yield ~ as.numeric(year) + wrsi_std,data=payouts_joined
-             ,index=c("district_2000","year"),effect='individual',model="random")
-summary(mod11)
-mod11_residuals <- data.frame("resid_m11" = as.numeric(mod11$residuals), "index" = as.numeric(names(mod11$residuals)))
-payouts_joined <- left_join(payouts_joined,mod11_residuals,by="index")
-mod11_resid_trend <- plm(resid_m11 ~ lag(resid_m11,c(1:5)),data=payouts_joined
-                         ,index=c("district_2000","year"),effect='individual',model="within")
-summary(mod11_resid_trend)
+stargazer(mod4,mod5,type='html',out=paste0(getwd(),"/table2.html"))
+
 
 ## plot yield and payouts by farmer group, time period
 
@@ -540,150 +497,139 @@ ggarrange(planting_group_plot,production_group_plot,yield_group_plot,payouts_gro
 ggarrange(yield_group_plot,payouts_group_plot,common.legend = TRUE, nrow=2)
 
 
-# predicted yield against actual
-
-group_pred <- payouts_joined %>% ungroup() %>% filter(!is.na(yield)) %>%
-  mutate(mod1_pred = as.numeric(predict(mod1)), mod3_pred = as.numeric(predict(mod3))) %>%
-  group_by(year,group) %>%
-  summarise(mod1_pred = mean(mod1_pred,na.rm=T),mod3_pred = mean(mod3_pred,na.rm=T), payout = mean(payout,na.rm=T), 
-            wrsi = mean(wrsi,na.rm = T)) %>%
-  mutate(era = ifelse(year %in% c(2001:2006),1,ifelse(year %in% (2007:2011),2,3))) %>%
-  mutate(worst_years_dum = ifelse (
-    year %in% c(2002,2019) & group == 1,1,ifelse(
-      year %in% c(2005,2019) & group == 2,1,ifelse(
-        year %in% c(2002,2005,2015,2019) & group == 3,1,NA)
-    )
-  )) %>%
-  mutate(worst_years = ifelse(worst_years_dum == 1,year,NA)) %>%
-  left_join(yield_group %>% dplyr::select(Year,group,yield_group),by=c("year" = "Year","group"="group"))
-
-yield_group_predM1_plot <- ggplot(group_pred %>%
-                                    mutate(group = factor(group,labels = c("South","North","Central"))) 
-                                  ,aes(x=year,y=mod1_pred,color=factor(era))) +
-  geom_point()+ geom_line() +
-  geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
-  # geom_hline(yintercept=0,color="purple") +
-  theme_bw() +
-  ylim(c(0,3)) +
-  facet_wrap(~group) +
-  scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
-  theme(legend.position = "none")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
-
-yield_group_predM3_plot <- ggplot(group_pred %>%
-      mutate(group = factor(group,labels = c("South","North","Central"))) 
-                                    ,aes(x=year,y=mod3_pred,color=factor(era))) +
-  geom_point()+ geom_line() +
-  geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
-  # geom_hline(yintercept=0,color="purple") +
-  theme_bw() +
-  ylim(c(0,3)) +
-  facet_wrap(~group) +
-  scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
-  theme(legend.position = "none")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
-
-ggarrange(yield_group_plot,yield_group_predM1_plot,yield_group_predM3_plot,nrow=3)
-
-yield_pred_v_actual <- ggplot(group_pred %>%
-                                pivot_longer(c(mod1_pred,mod3_pred,yield_group)) %>%
-                                    mutate(group = factor(group,labels = c("South","North","Central"))) 
-                                  ,aes(x=year,y=value,color=name,group=factor(era))) +
-  geom_point() +
-  geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
-  # geom_hline(yintercept=0,color="purple") +
-  theme_bw() +
-  ylim(c(0,3)) +
-  facet_wrap(~group) +
-  scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
-  theme(legend.position = "bottom")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
-
-ggarrange(yield_pred_v_actual)
-
-yield_percentiles <- group_pred %>%
-  group_by(group) %>%
-  mutate(m1_pctile = percent_rank(mod1_pred),
-         m3_pctile = percent_rank(mod3_pred),
-         actual_pctile = percent_rank(yield_group)) %>%
-  ungroup()
-
-pctile_plot_1 <- ggplot(yield_percentiles %>% mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) %>%
-         mutate(year_lab = ifelse(worst_years_dum==2,year,NA))
-       ,aes(x=m1_pctile,y=actual_pctile, size=worst_years_dum,color=factor(era,
-                                  labels=c("Before FISP","During scale-up","After scale-up")))) + 
-  scale_size_continuous(range=c(1,3)) +
-  geom_point(aes(shape = factor(group,labels=c("South","North","Central") ))) +
-  geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
-  geom_abline(intercept = 0,slope=1,linetype="dashed") +
-  theme_bw() +
-  xlab("Naive prediction %ile") +
-  ylab("Actual yield %ile") +
-  guides(size="none",shape="legend",color="legend") +
-  labs(color = "Policy era", shape = "Farming region") +
-  theme(legend.position = 'bottom')
-
-pctile_plot_2 <- ggplot(yield_percentiles %>% mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) %>%
-         mutate(year_lab = ifelse(worst_years_dum==2,year,NA))
-       ,aes(x=m3_pctile,y=actual_pctile, size=worst_years_dum,color=factor(era,
-                        labels=c("Before FISP","During scale-up","After scale-up")))) + 
-  scale_size_continuous(range=c(1,3)) +
-  geom_point(aes(shape = factor(group,labels=c("South","North","Central") ))) +
-  geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
-  geom_abline(intercept = 0,slope=1,linetype="dashed") +
-  theme_bw() +
-  xlab("Prediction with context %ile") +
-  ylab("Actual yield %ile") +
-  guides(size="none",shape="legend",color="legend") +
-  labs(color = "Policy era",shape="Farming region") +
-  theme(legend.position = 'bottom')
-
-ggarrange(pctile_plot_1,pctile_plot_2,common.legend = TRUE, nrow=1)
-
-ggplot(group_pred %>% mutate(era = factor(era,levels=c(1:3),labels=c("Before FISP","During scale-up","After scale-up"))) %>%
-         mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) 
-       %>% mutate(year_lab = ifelse(worst_years_dum==2,year,NA)),
-       aes(x=payout,y=yield_group,color=factor(group,labels=c("South","North","Central")),group=factor(group))) +
-  geom_point(aes(size = worst_years_dum, shape = factor(group))) +
-  scale_size_continuous(range=c(1,3)) +
-  scale_color_brewer(palette="Set2") +
-  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
-  geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
-  facet_wrap(~era) +
-  theme_bw() +
-  ylab("Yield (mt/ha)") +
-  xlab("Drought severity index") +
-  labs(color = "Farming region") +
-  guides(size="none", color = "legend", shape = "none") +
-  theme(legend.position = 'bottom')
-
-model_diff <- ggplot(group_pred %>%
-         mutate(group = factor(group,labels = c("South","North","Central")))  
-         ,aes(x=year,y=mod3_pred-mod1_pred,color=factor(era))) +
-  geom_point()+ geom_line() +
-  geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
-  geom_hline(yintercept=0,color="purple") +
-  theme_bw() +
-  facet_wrap(~group) +
-  ylab("Yield difference m1-m2") +
-  ggtitle("Model bias without context") +
-  scale_x_continuous( breaks = seq(2001, 2022, by = 5)) +
-  ylim(c(-0.5,0.5)) +
-  theme(legend.position = "none")+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
-
-ggarrange(yield_group_plot,payouts_group_plot,nrow=2,align="h")
+# 
+# group_pred <- payouts_joined %>% ungroup()  %>%
+#   mutate(mod1_pred = as.numeric(predict(mod1)), mod3_pred = as.numeric(predict(mod3)) ) %>%
+#   group_by(year,group) %>%
+#   summarise(mod1_pred = mean(mod1_pred,na.rm=T),mod3_pred = mean(mod3_pred,na.rm=T), payout = mean(payout,na.rm=T), 
+#             wrsi = mean(wrsi,na.rm = T)) %>%
+#   mutate(era = ifelse(year %in% c(2001:2006),1,ifelse(year %in% (2007:2011),2,3))) %>%
+#   mutate(worst_years_dum = ifelse (
+#     year %in% c(2002,2019) & group == 1,1,ifelse(
+#       year %in% c(2005,2019) & group == 2,1,ifelse(
+#         year %in% c(2002,2005,2015,2019) & group == 3,1,NA)
+#     )
+#   )) %>%
+#   mutate(worst_years = ifelse(worst_years_dum == 1,year,NA)) %>%
+#   left_join(yield_group %>% dplyr::select(Year,group,yield_group),by=c("year" = "Year","group"="group"))
+# 
+# yield_group_predM1_plot <- ggplot(group_pred %>%
+#                                     mutate(group = factor(group,labels = c("South","North","Central"))) 
+#                                   ,aes(x=year,y=mod1_pred,color=factor(era))) +
+#   geom_point()+ geom_line() +
+#   geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
+#   # geom_hline(yintercept=0,color="purple") +
+#   theme_bw() +
+#   ylim(c(0,3)) +
+#   facet_wrap(~group) +
+#   scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
+#   theme(legend.position = "none")+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
+# 
+# yield_group_predM3_plot <- ggplot(group_pred %>%
+#       mutate(group = factor(group,labels = c("South","North","Central"))) 
+#                                     ,aes(x=year,y=mod3_pred,color=factor(era))) +
+#   geom_point()+ geom_line() +
+#   geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
+#   # geom_hline(yintercept=0,color="purple") +
+#   theme_bw() +
+#   ylim(c(0,3)) +
+#   facet_wrap(~group) +
+#   scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
+#   theme(legend.position = "none")+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
+# 
+# 
+# ggarrange(yield_group_plot,yield_group_predM1_plot,yield_group_predM3_plot,nrow=3)
+# 
+# yield_pred_v_actual <- ggplot(group_pred %>%
+#                                 pivot_longer(c(mod1_pred,mod3_pred,yield_group)) %>%
+#                                     mutate(group = factor(group,labels = c("South","North","Central"))) 
+#                                   ,aes(x=year,y=value,color=name,group=factor(era))) +
+#   geom_point() +
+#   geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
+#   # geom_hline(yintercept=0,color="purple") +
+#   theme_bw() +
+#   ylim(c(0,3)) +
+#   facet_wrap(~group) +
+#   scale_x_continuous( breaks = seq(2001, 2022, by = 1)) +
+#   theme(legend.position = "bottom")+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
+# 
+# ggarrange(yield_pred_v_actual)
+# 
+# yield_percentiles <- group_pred %>%
+#   group_by(group) %>%
+#   mutate(m1_pctile = percent_rank(mod1_pred),
+#          m3_pctile = percent_rank(mod3_pred),
+#          actual_pctile = percent_rank(yield_group)) %>%
+#   ungroup()
+# 
+# pctile_plot_1 <- ggplot(yield_percentiles %>% mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) %>%
+#          mutate(year_lab = ifelse(worst_years_dum==2,year,NA))
+#        ,aes(x=m1_pctile,y=actual_pctile, size=worst_years_dum,color=factor(era,
+#                                   labels=c("Before FISP","During scale-up","After scale-up")))) + 
+#   scale_size_continuous(range=c(1,3)) +
+#   geom_point(aes(shape = factor(group,labels=c("South","North","Central") ))) +
+#   geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
+#   geom_abline(intercept = 0,slope=1,linetype="dashed") +
+#   theme_bw() +
+#   xlab("Naive prediction %ile") +
+#   ylab("Actual yield %ile") +
+#   guides(size="none",shape="legend",color="legend") +
+#   labs(color = "Policy era", shape = "Farming region") +
+#   theme(legend.position = 'bottom')
+# 
+# pctile_plot_2 <- ggplot(yield_percentiles %>% mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) %>%
+#          mutate(year_lab = ifelse(worst_years_dum==2,year,NA))
+#        ,aes(x=m3_pctile,y=actual_pctile, size=worst_years_dum,color=factor(era,
+#                         labels=c("Before FISP","During scale-up","After scale-up")))) + 
+#   scale_size_continuous(range=c(1,3)) +
+#   geom_point(aes(shape = factor(group,labels=c("South","North","Central") ))) +
+#   geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
+#   geom_abline(intercept = 0,slope=1,linetype="dashed") +
+#   theme_bw() +
+#   xlab("Prediction with context %ile") +
+#   ylab("Actual yield %ile") +
+#   guides(size="none",shape="legend",color="legend") +
+#   labs(color = "Policy era",shape="Farming region") +
+#   theme(legend.position = 'bottom')
+# 
+# ggarrange(pctile_plot_1,pctile_plot_2,common.legend = TRUE, nrow=1)
+# 
+# ggplot(group_pred %>% mutate(era = factor(era,levels=c(1:3),labels=c("Before FISP","During scale-up","After scale-up"))) %>%
+#          mutate(worst_years_dum = ifelse(is.na(worst_years_dum),1,2)) 
+#        %>% mutate(year_lab = ifelse(worst_years_dum==2,year,NA)),
+#        aes(x=payout,y=yield_group,color=factor(group,labels=c("South","North","Central")),group=factor(group))) +
+#   geom_point(aes(size = worst_years_dum, shape = factor(group))) +
+#   scale_size_continuous(range=c(1,3)) +
+#   scale_color_brewer(palette="Set2") +
+#   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+#   geom_text(aes(label=year_lab),nudge_y=0.05,nudge_x = -0.05) +
+#   facet_wrap(~era) +
+#   theme_bw() +
+#   ylab("Yield (mt/ha)") +
+#   xlab("Drought severity index") +
+#   labs(color = "Farming region") +
+#   guides(size="none", color = "legend", shape = "none") +
+#   theme(legend.position = 'bottom')
+# 
+# model_diff <- ggplot(group_pred %>%
+#          mutate(group = factor(group,labels = c("South","North","Central")))  
+#          ,aes(x=year,y=mod3_pred-mod1_pred,color=factor(era))) +
+#   geom_point()+ geom_line() +
+#   geom_vline(aes(xintercept=worst_years),linetype='dashed',color="orange",size=1) +
+#   geom_hline(yintercept=0,color="purple") +
+#   theme_bw() +
+#   facet_wrap(~group) +
+#   ylab("Yield difference m1-m2") +
+#   ggtitle("Model bias without context") +
+#   scale_x_continuous( breaks = seq(2001, 2022, by = 5)) +
+#   ylim(c(-0.5,0.5)) +
+#   theme(legend.position = "none")+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) 
+# 
+# ggarrange(yield_group_plot,payouts_group_plot,nrow=2,align="h")
 
 write.csv(payouts_joined,"time_series_joined.csv")
-
-group_pred %>% ungroup() %>%
-  group_by(group) %>% 
-  summarise(r1 = cor(x=mod1_pred,y=yield_group,use="complete.obs",method="spearman"),
-            r3 = cor(x=mod3_pred,y=yield_group,use="complete.obs",method="spearman"))
-
-payouts_joined %>% ungroup() %>% filter(!is.na(yield)) %>%
-  mutate(mod1_pred = as.numeric(predict(mod1)), mod3_pred = as.numeric(predict(mod3))) %>%
-  group_by(group) %>% 
-  summarise(r1 = cor(x=mod1_pred,y=yield,use="complete.obs",method="spearman"),
-            r3 = cor(x=mod3_pred,y=yield,use="complete.obs",method="spearman"))
 
